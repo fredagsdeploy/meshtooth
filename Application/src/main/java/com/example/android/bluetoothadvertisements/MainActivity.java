@@ -18,11 +18,15 @@ package com.example.android.bluetoothadvertisements;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -33,8 +37,16 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.ContextCompat;
+import android.util.AttributeSet;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.Arrays;
+import java.util.Optional;
 
 import static com.example.android.bluetoothadvertisements.Constants.Characteristic_UUID;
 import static com.example.android.bluetoothadvertisements.Constants.Descriptor_UUID;
@@ -45,9 +57,13 @@ import static com.example.android.bluetoothadvertisements.Constants.Service_UUID
  */
 public class MainActivity extends FragmentActivity {
 
+    private static final String TAG = FragmentActivity.class.getSimpleName();
+
+
     private static final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 167;
     private BluetoothAdapter mBluetoothAdapter;
     private Handler mHandler;
+
 
     public boolean areLocationServicesEnabled(Context context) {
         LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
@@ -65,6 +81,7 @@ public class MainActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setTitle(R.string.activity_main_title);
+
 
         int permissionCheck = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION);
 
@@ -122,7 +139,7 @@ public class MainActivity extends FragmentActivity {
         }
 
 
-        BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         MyGattServerCallback myGattServerCallback = new MyGattServerCallback();
 
         BluetoothGattServer btGattServer = bluetoothManager.openGattServer(this, myGattServerCallback);
@@ -139,8 +156,9 @@ public class MainActivity extends FragmentActivity {
         // myCharacteristic.addDescriptor(new BluetoothGattDescriptor(Descriptor_UUID.getUuid(), BluetoothGattDescriptor.PERMISSION_READ));
         myService.addCharacteristic(myCharacteristic);
         btGattServer.addService(myService);
-
     }
+
+
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -187,6 +205,84 @@ public class MainActivity extends FragmentActivity {
         transaction.replace(R.id.advertiser_fragment_container, advertiserFragment);
 
         transaction.commit();
+
+        Log.d(TAG, "On activity result");
+        final Button fetchButton = findViewById(R.id.fetchButton);
+        final TextView textView = findViewById(R.id.lastMessage);
+        fetchButton.setOnClickListener(v -> {
+            Optional<Client> firstNeighbout = ClientList.getInstance().getFirst();
+            if (!firstNeighbout.isPresent()) {
+                Log.d(TAG, "no neighbour present");
+                return;
+            }
+
+            Client client = firstNeighbout.get();
+            String address = client.getDevice().getAddress();
+            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+            Log.d(TAG, device.getName());
+            Log.d(TAG, device.getAddress());
+
+
+            if (client.isConnected()) {
+                BluetoothGatt gatt = client.getGatt();
+                if (gatt != null) {
+                    BluetoothGattCharacteristic characteristic = gatt.getService(Service_UUID.getUuid()).getCharacteristic(Characteristic_UUID.getUuid());
+                    gatt.readCharacteristic(characteristic);
+                    return;
+                }
+
+            }
+
+
+            device.connectGatt(MainActivity.this, false, new BluetoothGattCallback() {
+                @Override
+                public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+                    Log.d(TAG, "connect state updated: " + status + ", " + newState);
+                    //BluetoothGatt. 0 = success
+                    //BluetoothProfile. disconnected, connecting connected
+                    ClientList.getInstance().setConnected(address, newState == BluetoothProfile.STATE_CONNECTED);
+                    ClientList.getInstance().setGatt(address, gatt);
+
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        gatt.discoverServices();
+                    } else {
+                        Log.d(TAG, "status is not success");
+                    }
+
+                }
+
+                @Override
+                public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        Log.d(TAG, "services discovered");
+                        BluetoothGattCharacteristic characteristic = gatt.getService(Service_UUID.getUuid()).getCharacteristic(Characteristic_UUID.getUuid());
+                        gatt.readCharacteristic(characteristic);
+                    } else {
+                        Log.d(TAG, "failed to discover services");
+                    }
+                }
+
+                @Override
+                public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+
+                        Log.d(TAG, "characteristic: "  + characteristic.getStringValue(0));
+
+                        Handler mainHandler = new Handler(MainActivity.this.getMainLooper());
+
+                        mainHandler.post(() -> {
+                            textView.setText(characteristic.getStringValue(0));
+                        });
+
+                    } else {
+                        Log.d(TAG, "failed to discover services");
+                    }
+                }
+            });
+
+
+            Log.d(TAG, "fetch button");
+        });
     }
 
     private void showErrorText(int messageId) {

@@ -16,9 +16,11 @@
 
 package com.example.android.bluetoothadvertisements;
 
+import android.bluetooth.BluetoothDevice;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,16 +28,19 @@ import android.widget.BaseAdapter;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Holds and displays {@link ScanResult}s, used by {@link ScannerFragment}.
  */
-public class ScanResultAdapter extends BaseAdapter {
-
-    private ArrayList<ScanResult> mArrayList;
-
+public class ScanResultAdapter extends BaseAdapter implements Observer {
     private Context mContext;
+
+    private List<Client> devices = new ArrayList<>();
 
     private LayoutInflater mInflater;
 
@@ -43,22 +48,22 @@ public class ScanResultAdapter extends BaseAdapter {
         super();
         mContext = context;
         mInflater = inflater;
-        mArrayList = new ArrayList<>();
+        ClientList.getInstance().addObserver(this);
     }
 
     @Override
     public int getCount() {
-        return mArrayList.size();
+        return devices.size();
     }
 
     @Override
     public Object getItem(int position) {
-        return mArrayList.get(position);
+        return devices.get(position);
     }
 
     @Override
     public long getItemId(int position) {
-        return mArrayList.get(position).getDevice().getAddress().hashCode();
+        return devices.get(position).getDevice().getAddress().hashCode();
     }
 
     @Override
@@ -71,17 +76,24 @@ public class ScanResultAdapter extends BaseAdapter {
 
         TextView deviceNameView = (TextView) view.findViewById(R.id.device_name);
         TextView deviceAddressView = (TextView) view.findViewById(R.id.device_address);
-        TextView lastSeenView = (TextView) view.findViewById(R.id.last_seen);
+        // TextView lastSeenView = (TextView) view.findViewById(R.id.last_seen);
+        TextView connectedView = (TextView) view.findViewById(R.id.connected);
 
-        ScanResult scanResult = mArrayList.get(position);
 
-        String name = scanResult.getDevice().getName();
+
+        Client client = devices.get(position);
+        BluetoothDevice device = client.getDevice();
+
+        String name = device.getName();
         if (name == null) {
             name = mContext.getResources().getString(R.string.no_name);
         }
         deviceNameView.setText(name);
-        deviceAddressView.setText(scanResult.getDevice().getAddress());
-        lastSeenView.setText(getTimeSinceString(mContext, scanResult.getTimestampNanos()));
+        deviceAddressView.setText(device.getAddress());
+
+        connectedView.setVisibility(client.isConnected() ? View.VISIBLE : View.INVISIBLE);
+
+        // lastSeenView.setText(getTimeSinceString(mContext, scanResult.getTimestampNanos()));
 
         return view;
     }
@@ -91,8 +103,8 @@ public class ScanResultAdapter extends BaseAdapter {
      */
     private int getPosition(String address) {
         int position = -1;
-        for (int i = 0; i < mArrayList.size(); i++) {
-            if (mArrayList.get(i).getDevice().getAddress().equals(address)) {
+        for (int i = 0; i < devices.size(); i++) {
+            if (devices.get(i).getDevice().getAddress().equals(address)) {
                 position = i;
                 break;
             }
@@ -101,29 +113,6 @@ public class ScanResultAdapter extends BaseAdapter {
     }
 
 
-    /**
-     * Add a ScanResult item to the adapter if a result from that device isn't already present.
-     * Otherwise updates the existing position with the new ScanResult.
-     */
-    public void add(ScanResult scanResult) {
-
-        int existingPosition = getPosition(scanResult.getDevice().getAddress());
-
-        if (existingPosition >= 0) {
-            // Device is already in list, update its record.
-            mArrayList.set(existingPosition, scanResult);
-        } else {
-            // Add new Device's ScanResult to list.
-            mArrayList.add(scanResult);
-        }
-    }
-
-    /**
-     * Clear out the adapter.
-     */
-    public void clear() {
-        mArrayList.clear();
-    }
 
     /**
      * Takes in a number of nanoseconds and returns a human-readable string giving a vague
@@ -163,5 +152,16 @@ public class ScanResultAdapter extends BaseAdapter {
         }
 
         return lastSeenText;
+    }
+
+    @Override
+    public void update(Observable o, Object arg) {
+        Log.d("update", "got update");
+        if (arg instanceof ClientList) {
+            devices = ((ClientList) arg).values();
+            notifyDataSetChanged();
+        } else {
+            Log.d("tjenna", "this should never happen");
+        }
     }
 }

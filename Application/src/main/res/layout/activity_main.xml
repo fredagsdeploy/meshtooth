@@ -21,6 +21,19 @@
         android:layout_height="fill_parent"
         android:id="@+id/sample_main_layout">
 
+    <TextView
+        android:id="@+id/lastMessage"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:background="#0FACACAC"
+        android:text="" />
+
+    <Button
+        android:id="@+id/fetchButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Fetch" />
+
     <FrameLayout
         android:id="@+id/scanner_fragment_container"
         android:layout_weight="1"

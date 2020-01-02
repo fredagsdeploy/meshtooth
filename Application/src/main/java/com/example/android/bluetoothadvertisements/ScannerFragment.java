@@ -139,12 +139,7 @@ public class ScannerFragment extends ListFragment {
             Log.d(TAG, "Starting Scanning");
 
             // Will stop the scanning after a set time.
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    stopScanning();
-                }
-            }, SCAN_PERIOD);
+            mHandler.postDelayed(() -> stopScanning(), SCAN_PERIOD);
 
             // Kick off a new scan.
             mScanCallback = new SampleScanCallback();
@@ -204,19 +199,17 @@ public class ScannerFragment extends ListFragment {
         @Override
         public void onBatchScanResults(List<ScanResult> results) {
             super.onBatchScanResults(results);
-
             for (ScanResult result : results) {
-                mAdapter.add(result);
+                Log.d(TAG, "add device batch " + result.getDevice().getName());
+                ClientList.getInstance().add(result.getDevice());
             }
-            mAdapter.notifyDataSetChanged();
         }
 
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
-
-            mAdapter.add(result);
-            mAdapter.notifyDataSetChanged();
+            Log.d(TAG, "add device " + result.getDevice().getName());
+            ClientList.getInstance().add(result.getDevice());
         }
 
         @Override

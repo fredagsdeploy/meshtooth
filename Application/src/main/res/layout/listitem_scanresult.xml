@@ -38,5 +38,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12dp"/>
+
+    <TextView
+        android:id="@+id/connected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connected"
+        android:visibility="invisible" />
 </LinearLayout>
 </RelativeLayout>
